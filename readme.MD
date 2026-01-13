@@ -115,7 +115,7 @@ pkg update && pkg upgrade -y
 pkg install git nodejs ffmpeg -y
 
 # Clone the repository
-git clone https://github.com/shanudhatirosh/SHANU-MD.git
+git clone https://github.com/ShanudhaTirosh/SHANU-MD.git
 
 # Navigate to directory
 cd SHANU-MD
@@ -140,7 +140,7 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install git nodejs npm ffmpeg -y
 
 # Clone the repository
-git clone https://github.com/shanudhatirosh/SHANU-MD.git
+git clone https://github.com/ShanudhaTirosh/SHANU-MD.git
 
 # Navigate to directory
 cd SHANU-MD
@@ -159,7 +159,7 @@ npm start
 
 ```bash
 # Clone the repository
-git clone https://github.com/shanudhatirosh/SHANU-MD.git
+git clone https://github.com/ShanudhaTirosh/SHANU-MD.git
 cd SHANU-MD
 
 # Build Docker image
@@ -256,7 +256,6 @@ SHANU-MD/
 ├── commands/      # Bot commands
 ├── data/  #store the data
 ├── lib/           # Helper functions
-│   
 ├── main.js          # command Configuration file
 ├── config.js          # Configuration file
 ├── index.js           # Main entry point
@@ -367,7 +366,7 @@ copies or substantial portions of the Software.
 
 ### 🌟 **Star History**
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Shanudhatirosh/SHANU-MD&type=Date)](https://star-history.com/#Shanudhatirosh/SHANU-MD&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=ShanudhaTirosh/SHANU-MD&type=Date)](https://star-history.com/hanudhaTirosh/SHANU-MD&Date)
 
 ---
 
@@ -385,11 +384,11 @@ copies or substantial portions of the Software.
 
 ### ⭐ **If you like this project, give it a star!**
 
-<a href="https://github.com/Shanudhatirosh/SHANU-MD/stargazers">
-  <img src="https://img.shields.io/github/stars/Shanudhatirosh/SHANU-MD?style=social" alt="GitHub stars">
+<a href="https://github.com/ShanudhaTirosh/SHANU-MD/stargazers">
+  <img src="https://img.shields.io/github/stars/ShanudhaTirosh/SHANU-MD?style=social" alt="GitHub stars">
 </a>
-<a href="https://github.com/Shanudhatirosh/SHANU-MD/network/members">
-  <img src="https://img.shields.io/github/forks/Shanudhatirosh/SHANU-MD?style=social" alt="GitHub forks">
+<a href="https://github.com/ShanudhaTirosh/SHANU-MD/network/members">
+  <img src="https://img.shields.io/github/forks/ShanudhaTirosh/SHANU-MD?style=social" alt="GitHub forks">
 </a>
 
 ---
@@ -398,7 +397,7 @@ copies or substantial portions of the Software.
   <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=100&section=footer"/>
 </p>
 
-**Made with ❤️ by [Shanudha Tirosh](https://github.com/Shanudhatirosh)**
+**Made with ❤️ by [Shanudha Tirosh](https://github.com/ShanudhaTirosh)**
 
 *© 2025 SHANU-MD. All Rights Reserved.*
 
