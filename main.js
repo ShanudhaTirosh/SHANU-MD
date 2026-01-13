@@ -143,7 +143,7 @@ const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/
 const settingsCommand = require('./commands/settings');
 const soraCommand = require('./commands/sora');
 // Additional Download Commands
-const facebookCommand = require('./commands/facebook2');
+const facebook2Command = require('./commands/facebook2');
 const imgSearchCommand = require('./commands/imgsearch');
 const ringtoneCommand = require('./commands/ringtone');
 const tiktokDlCommand = require('./commands/tiktokdl');
