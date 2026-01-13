@@ -75,10 +75,10 @@ setInterval(() => {
     }
 }, 30_000) // check every 30 seconds
 
-let phoneNumber = "911234567890"
+let phoneNumber = "94765749332"
 let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
 
-global.botname = "KNIGHT BOT"
+global.botname = "Shanu md"
 global.themeemoji = "•"
 const pairingCode = !!phoneNumber || process.argv.includes("--pairing-code")
 const useMobile = process.argv.includes("--mobile")
@@ -175,10 +175,9 @@ async function startXeonBotInc() {
                             contextInfo: {
                                 forwardingScore: 1,
                                 isForwarded: true,
-                                forwardedNewsletterMessageInfo: {
-                                    newsletterJid: '120363161513685998@newsletter',
-                                    newsletterName: 'KnightBot MD',
-                                    serverMessageId: -1
+                    newsletterJid: '120363423620239927@newsletter',
+                    newsletterName: 'Shanu-MD Bot',
+                    serverMessageId: -1
                                 }
                             }
                         }).catch(console.error);
