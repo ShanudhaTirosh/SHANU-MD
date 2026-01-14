@@ -1,3 +1,10 @@
+
+// Add this code at the TOP of your index.js file (after the requires but before the bot startup)
+
+
+
+
+
 /**
  * Knight Bot - A WhatsApp Bot
  * Copyright (c) 2024 Professor
@@ -58,6 +65,36 @@ const store = require('./lib/lightweight_store')
 store.readFromFile()
 const settings = require('./settings')
 setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
+const http = require('http');
+
+// Create a simple HTTP server for health checks
+const PORT = process.env.PORT || 8000;
+const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            status: 'ok',
+            bot: 'Shanu-MD',
+            version: settings.version || '3.0.5',
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        }));
+    } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not Found');
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`✅ Health check server running on port ${PORT}`);
+    logger.success('Health check server started', { port: PORT });
+});
+
+// Handle server errors
+server.on('error', (error) => {
+    console.error('Health check server error:', error);
+    logger.error('Health check server error', { error: error.message });
+});
 
 // Memory optimization - Force garbage collection if available
 setInterval(() => {
