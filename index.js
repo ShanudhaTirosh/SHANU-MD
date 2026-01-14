@@ -1,6 +1,14 @@
+// APPLY THESE FIXES TO YOUR index.js FILE
 
-// Add this code at the TOP of your index.js file (after the requires but before the bot startup)
+// 1. UPDATE the makeWASocket configuration (around line 115)
+// REPLACE the existing makeWASocket call with this enhanced version:
 
+
+// 2. UPDATE the connection.update handler (around line 340)
+// REPLACE the connection handling section with this improved version:
+
+
+// 3. ADD THIS AFTER makeWASocket to prevent session buildup:
 
 
 
@@ -65,36 +73,6 @@ const store = require('./lib/lightweight_store')
 store.readFromFile()
 const settings = require('./settings')
 setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
-const http = require('http');
-
-// Create a simple HTTP server for health checks
-const PORT = process.env.PORT || 8000;
-const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            status: 'ok',
-            bot: 'Shanu-MD',
-            version: settings.version || '3.0.5',
-            uptime: process.uptime(),
-            timestamp: new Date().toISOString()
-        }));
-    } else {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
-    }
-});
-
-server.listen(PORT, () => {
-    console.log(`✅ Health check server running on port ${PORT}`);
-    logger.success('Health check server started', { port: PORT });
-});
-
-// Handle server errors
-server.on('error', (error) => {
-    console.error('Health check server error:', error);
-    logger.error('Health check server error', { error: error.message });
-});
 
 // Memory optimization - Force garbage collection if available
 setInterval(() => {
@@ -132,35 +110,54 @@ const question = (text) => {
     }
 }
 
+const XeonBotInc = makeWASocket({
+    version,
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: !pairingCode,
+    browser: ["Ubuntu", "Chrome", "20.0.04"],
+    auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+    },
+    markOnlineOnConnect: true,
+    generateHighQualityLinkPreview: true,
+    syncFullHistory: false,
+    getMessage: async (key) => {
+        let jid = jidNormalizedUser(key.remoteJid)
+        let msg = await store.loadMessage(jid, key.id)
+        return msg?.message || ""
+    },
+    msgRetryCounterCache,
+    defaultQueryTimeoutMs: 60000,
+    connectTimeoutMs: 60000,
+    keepAliveIntervalMs: 10000,
+    // ADD THESE NEW OPTIONS FOR STABILITY:
+    retryRequestDelayMs: 250,
+    maxMsgRetryCount: 5,
+    fireInitQueries: true,
+    emitOwnEvents: false,
+    shouldIgnoreJid: jid => false,
+    cachedGroupMetadata: async (jid) => {
+        const data = await store.fetchGroupMetadata(jid);
+        return data || null;
+    }
+})
 
-async function startXeonBotInc() {
-    try {
-        let { version, isLatest } = await fetchLatestBaileysVersion()
-        const { state, saveCreds } = await useMultiFileAuthState(`./session`)
-        const msgRetryCounterCache = new NodeCache()
-
-        const XeonBotInc = makeWASocket({
-            version,
-            logger: pino({ level: 'silent' }),
-            printQRInTerminal: !pairingCode,
-            browser: ["Ubuntu", "Chrome", "20.0.04"],
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
-            },
-            markOnlineOnConnect: true,
-            generateHighQualityLinkPreview: true,
-            syncFullHistory: false,
-            getMessage: async (key) => {
-                let jid = jidNormalizedUser(key.remoteJid)
-                let msg = await store.loadMessage(jid, key.id)
-                return msg?.message || ""
-            },
-            msgRetryCounterCache,
-            defaultQueryTimeoutMs: 60000,
-            connectTimeoutMs: 60000,
-            keepAliveIntervalMs: 10000,
-        })
+// Clear old sessions periodically to prevent memory issues
+setInterval(() => {
+    if (XeonBotInc?.msgRetryCounterCache) {
+        const cache = XeonBotInc.msgRetryCounterCache;
+        const keys = cache.keys();
+        let cleared = 0;
+        for (const key of keys) {
+            cache.del(key);
+            cleared++;
+        }
+        if (cleared > 0) {
+            logger.debug(`Cleared ${cleared} message retry cache entries`);
+        }
+    }
+}, 300000); // Every 5 minutes
 
         // ============ ADD THESE LINES AFTER makeWASocket ============
         // Initialize logger with socket
@@ -301,6 +298,7 @@ async function startXeonBotInc() {
             }, 3000)
         }
 
+     
         // Connection handling
         XeonBotInc.ev.on('connection.update', async (s) => {
             const { connection, lastDisconnect, qr } = s
@@ -334,8 +332,8 @@ async function startXeonBotInc() {
                             forwardingScore: 1,
                             isForwarded: true,
                             forwardedNewsletterMessageInfo: {
-                                newsletterJid: '120363161513685998@newsletter',
-                                newsletterName: 'KnightBot MD',
+                                newsletterJid: '120363423620239927@newsletter',
+                                newsletterName: 'Shanu-MD Bot',
                                 serverMessageId: -1
                             }
                         }
@@ -461,6 +459,23 @@ async function startXeonBotInc() {
     }
 }
 
+// 4. ADD session cleanup on exit:
+
+process.on('SIGINT', async () => {
+    logger.info('Received SIGINT, closing gracefully...');
+    if (XeonBotInc?.ws?.socket) {
+        await XeonBotInc.ws.close();
+    }
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    logger.info('Received SIGTERM, closing gracefully...');
+    if (XeonBotInc?.ws?.socket) {
+        await XeonBotInc.ws.close();
+    }
+    process.exit(0);
+});
 
 // Start the bot with error handling
 startXeonBotInc().catch(error => {
