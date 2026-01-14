@@ -1,4 +1,5 @@
 const settings = require("../settings");
+
 async function aliveCommand(sock, chatId, message) {
     try {
         const message1 = `*🤖 Shanu-MD Bot is Active!*\n\n` +
@@ -18,7 +19,7 @@ async function aliveCommand(sock, chatId, message) {
                 forwardingScore: 999,
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363423620239927@newsletter,
+                    newsletterJid: '120363423620239927@newsletter',
                     newsletterName: 'ShanuBot MD',
                     serverMessageId: -1
                 }
