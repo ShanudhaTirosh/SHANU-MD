@@ -19,7 +19,8 @@ const axios = require('axios')
 const { handleMessages, handleGroupParticipantUpdate, handleStatus } = require('./main');
 const PhoneNumber = require('awesome-phonenumber')
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./lib/exif')
-const { smsg, isUrl, generateMessageTag, getBuffer, getSizeMedia, fetch, await, sleep, reSize } = require('./lib/myfunc')
+// FIXED: Removed 'await' from imports as it's a JavaScript keyword
+const { smsg, isUrl, generateMessageTag, getBuffer, getSizeMedia, fetch, sleep, reSize } = require('./lib/myfunc')
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -170,15 +171,15 @@ async function startXeonBotInc() {
                     logger.error("Error in handleMessages", { error: err.message });
                     // Only try to send error message if we have a valid chatId
                     if (mek.key && mek.key.remoteJid) {
+                        // FIXED: Added missing closing brace for contextInfo
                         await XeonBotInc.sendMessage(mek.key.remoteJid, {
                             text: '❌ An error occurred while processing your message.',
                             contextInfo: {
                                 forwardingScore: 1,
                                 isForwarded: true,
-                    newsletterJid: '120363423620239927@newsletter',
-                    newsletterName: 'Shanu-MD Bot',
-                    serverMessageId: -1
-                                }
+                                newsletterJid: '120363423620239927@newsletter',
+                                newsletterName: 'Shanu-MD Bot',
+                                serverMessageId: -1
                             }
                         }).catch(console.error);
                     }
