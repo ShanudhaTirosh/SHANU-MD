@@ -1,13 +1,36 @@
 /**
- * Knight Bot - A WhatsApp Bot
- * Copyright (c) 2024 Professor
+ * SHANU - MD WhatsApp Bot
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the MIT License.
+ * Copyright (c) 2026 Shanudha Tirosh (SHANU FX)
  * 
- * Credits:
- * - Baileys Library by @adiwajshing
- * - Pair Code implementation inspired by TechGod143 & DGXEON
+ * License:
+ * This project is licensed under the MIT License.
+ * You are free to use, modify, and distribute this software
+ * with proper credit to the original authors.
+ * 
+ * Credits & Acknowledgements:
+ * - Baileys WhatsApp Library by @whiskeysockets (Main Developer)
+ * - Pair Code implementation by Prabath Kumara
+ * - Inspired by Knight Bot
+ * 
+ * Bot Information:
+ * - Bot Name: SHANU - MD
+ * - Developer: Shanudha Tirosh (SHANU FX)
+ * 
+ * Version & Build Info:
+ * - Version: v1.0.0
+ * - Build: Stable
+ * - Release Date: 2026-01-15
+ * - Runtime: Node.js
+ * - Library: Baileys (Multi-Device)
+ * 
+ * Contact Information:
+ * - Email: tiroshbrot123@gmail.com
+ * - GitHub: @ShanudhaTirosh
+ * 
+ * Disclaimer:
+ * This bot is not affiliated with or endorsed by WhatsApp Inc.
+ * Use at your own responsibility.
  */
 require('./settings')
 const { Boom } = require('@hapi/boom')
@@ -20,6 +43,8 @@ const { handleMessages, handleGroupParticipantUpdate, handleStatus } = require('
 const PhoneNumber = require('awesome-phonenumber')
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./lib/exif')
 const { smsg, isUrl, generateMessageTag, getBuffer, getSizeMedia, fetch, sleep, reSize } = require('./lib/myfunc')
+const { isSudo } = require('./lib/index');
+const isOwnerOrSudo = require('./lib/isOwner');
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -225,16 +250,21 @@ const startXeonBotInc = async () => {
                     return;
                 }
                 
-                // Check if message is from owner - ALWAYS allow owner messages
-                const isOwnerMessage = mek.key.fromMe || mek.key.remoteJid === owner[0] + '@s.whatsapp.net';
+                // ✅ UNIFIED OWNER DETECTION - Same as main.js
+                const senderId = mek.key.participant || mek.key.remoteJid;
+                const senderIsSudo = await isSudo(senderId);
+                const senderIsOwnerOrSudo = await isOwnerOrSudo(senderId, XeonBotInc, mek.key.remoteJid);
+                const isOwnerMessage = mek.key.fromMe || senderIsOwnerOrSudo || senderIsSudo;
                 
-                // In private mode, only block non-owner non-group messages
+                // ✅ PRIVATE MODE CHECK - Block ALL messages except owner (including groups)
                 if (!XeonBotInc.public && !isOwnerMessage && chatUpdate.type === 'notify') {
-                    const isGroup = mek.key?.remoteJid?.endsWith('@g.us')
-                    if (!isGroup) {
-                        logger.debug('Message blocked - Private mode, not owner, not group');
-                        return; // Block DMs in private mode, but allow group messages
-                    }
+                    logger.debug('Message blocked - Private mode, not owner', {
+                        senderId: senderId.split('@')[0],
+                        fromMe: mek.key.fromMe,
+                        isSudo: senderIsSudo,
+                        isOwnerOrSudo: senderIsOwnerOrSudo
+                    });
+                    return; // Block EVERYTHING in private mode except owner
                 }
                 
                 if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
@@ -304,6 +334,19 @@ const startXeonBotInc = async () => {
         }
 
         XeonBotInc.public = true
+        // Read actual mode from messageCount.json
+        try {
+            const messageCountPath = './data/messageCount.json';
+            if (fs.existsSync(messageCountPath)) {
+                const data = JSON.parse(fs.readFileSync(messageCountPath, 'utf8'));
+                if (typeof data.isPublic === 'boolean') {
+                    XeonBotInc.public = data.isPublic;
+                    console.log(chalk.cyan(`Bot mode loaded: ${XeonBotInc.public ? 'PUBLIC' : 'PRIVATE'}`));
+                }
+            }
+        } catch (error) {
+            console.error('Error reading bot mode:', error);
+        }
 
         XeonBotInc.serializeM = (m) => smsg(XeonBotInc, m, store)
 
