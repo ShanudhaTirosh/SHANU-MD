@@ -1,6 +1,6 @@
 const fetch = require('node-fetch');
 
-const API_KEY = 'prabath_sk_1d7a31d1891abfc40e0d09aa9c6ad37d3b7717a0';
+const API_KEY = 'prabath_sk_077fb699e307ba097affa7be3ea1eefa851a78d6';
 
 // Store movie search results
 if (!global.movieSearchCache) global.movieSearchCache = {};
