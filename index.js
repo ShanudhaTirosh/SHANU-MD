@@ -32,6 +32,10 @@
  * This bot is not affiliated with or endorsed by WhatsApp Inc.
  * Use at your own responsibility.
  */
+/**
+ * SHANU - MD WhatsApp Bot - FIXED VERSION
+ * Updated Baileys to latest version with group chat fixes
+ */
 require('./settings')
 const { Boom } = require('@hapi/boom')
 const fs = require('fs')
@@ -59,7 +63,8 @@ const {
     proto,
     jidNormalizedUser,
     makeCacheableSignalKeyStore,
-    delay
+    delay,
+    getAggregateVotesInPollMessage
 } = require("@whiskeysockets/baileys")
 const NodeCache = require("node-cache")
 const pino = require("pino")
@@ -87,16 +92,16 @@ setInterval(() => {
         global.gc()
         logger.debug('Garbage collection completed');
     }
-}, 60_000) // every 1 minute
+}, 60_000)
 
-// Memory monitoring - Restart if RAM gets too high
+// Memory monitoring
 setInterval(() => {
     const used = process.memoryUsage().rss / 1024 / 1024
     if (used > 400) {
         logger.warn('RAM too high, restarting bot', { memory: `${used.toFixed(2)}MB` });
-        process.exit(1) // Panel will auto-restart
+        process.exit(1)
     }
-}, 30_000) // check every 30 seconds
+}, 30_000)
 
 let phoneNumber = "94765749332"
 let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
@@ -106,24 +111,19 @@ global.themeemoji = "•"
 const pairingCode = !!phoneNumber || process.argv.includes("--pairing-code")
 const useMobile = process.argv.includes("--mobile")
 
-// Session generation mode flag
 let sessionGenerationMode = false
 
-// Only create readline interface if we're in an interactive environment
 const rl = process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null
 const question = (text) => {
     if (rl) {
         return new Promise((resolve) => rl.question(text, resolve))
     } else {
-        // In non-interactive environment, use ownerNumber from settings
         return Promise.resolve(settings.ownerNumber || phoneNumber)
     }
 }
 
-// Initialize message retry cache
 const msgRetryCounterCache = new NodeCache()
 
-// Function to generate and display SESSION_ID
 const generateSessionId = () => {
     try {
         const sessionPath = './session/creds.json'
@@ -152,29 +152,25 @@ const generateSessionId = () => {
 
 const startXeonBotInc = async () => {
     try {
-        // Ensure session directory exists
         if (!fs.existsSync('./session')) {
             fs.mkdirSync('./session', { recursive: true })
             logger.info('Session directory created');
         }
 
-        // Check if session exists
         const sessionExists = fs.existsSync('./session/creds.json')
         
-        // If no session exists, enable pairing mode
         if (!sessionExists) {
             console.log(chalk.yellow('No session found. Starting pairing code generation mode...'))
             logger.info('No session found, enabling pairing mode');
             sessionGenerationMode = true
         }
 
-        // Initialize auth state
         const { state, saveCreds } = await useMultiFileAuthState('./session')
         
-        // Fetch latest Baileys version
+        // ✅ UPDATED: Fetch latest Baileys version
         const { version, isLatest } = await fetchLatestBaileysVersion()
         
-        console.log(chalk.green(`Using Baileys v${version.join('.')}`))
+        console.log(chalk.green(`Using Baileys v${version.join('.')} ${isLatest ? '(Latest)' : '(Outdated)'}`))
         logger.info('Baileys version loaded', { version: version.join('.'), isLatest });
 
         const XeonBotInc = makeWASocket({
@@ -203,18 +199,12 @@ const startXeonBotInc = async () => {
             fireInitQueries: true,
             emitOwnEvents: false,
             shouldIgnoreJid: jid => false,
-const groupCache = new Map()
-
-cachedGroupMetadata: async (jid) => {
-    if (groupCache.has(jid)) return groupCache.get(jid)
-    const meta = await XeonBotInc.groupMetadata(jid)
-    groupCache.set(jid, meta)
-    return meta
-}
-}
+            cachedGroupMetadata: async (jid) => {
+                const data = await store.fetchGroupMetadata(jid);
+                return data || null;
+            }
         })
 
-        // Clear old sessions periodically to prevent memory issues
         setInterval(() => {
             if (XeonBotInc?.msgRetryCounterCache) {
                 const cache = XeonBotInc.msgRetryCounterCache;
@@ -228,62 +218,83 @@ cachedGroupMetadata: async (jid) => {
                     logger.debug(`Cleared ${cleared} message retry cache entries`);
                 }
             }
-        }, 300000); // Every 5 minutes
+        }, 300000);
 
-        // Initialize logger with socket
         logger.setSock(XeonBotInc);
-        
-        // Initialize console commander
         commander.initialize(XeonBotInc);
-        
-        // Log bot initialized
         logger.success('Bot initialized successfully');
 
-        // Save credentials when they update
         XeonBotInc.ev.on('creds.update', saveCreds)
-
         store.bind(XeonBotInc.ev)
 
-        // Message handling
+        // ✅ FIXED: Message handling with proper group chat support
         XeonBotInc.ev.on('messages.upsert', async chatUpdate => {
             try {
                 const mek = chatUpdate.messages[0]
                 if (!mek.message) return
                 mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message
+                
+                // Handle status updates
                 if (mek.key && mek.key.remoteJid === 'status@broadcast') {
                     await handleStatus(XeonBotInc, chatUpdate);
                     return;
                 }
                 
-                // ✅ UNIFIED OWNER DETECTION - Same as main.js
+                // ✅ CRITICAL FIX: Determine if this is a group
+                const chatId = mek.key.remoteJid;
+                const isGroup = chatId?.endsWith('@g.us');
+                
+                // ✅ UNIFIED OWNER DETECTION
                 const senderId = mek.key.participant || mek.key.remoteJid;
                 const senderIsSudo = await isSudo(senderId);
-                const senderIsOwnerOrSudo = await isOwnerOrSudo(senderId, XeonBotInc, mek.key.remoteJid);
+                const senderIsOwnerOrSudo = await isOwnerOrSudo(senderId, XeonBotInc, chatId);
                 const isOwnerMessage = mek.key.fromMe || senderIsOwnerOrSudo || senderIsSudo;
                 
-                // ✅ PRIVATE MODE CHECK - Block ALL messages except owner (including groups)
-                if (!XeonBotInc.public && !isOwnerMessage && chatUpdate.type === 'notify') {
-                    logger.debug('Message blocked - Private mode, not owner', {
-                        senderId: senderId.split('@')[0],
-                        fromMe: mek.key.fromMe,
-                        isSudo: senderIsSudo,
-                        isOwnerOrSudo: senderIsOwnerOrSudo
-                    });
-                    return; // Block EVERYTHING in private mode except owner
+                // ✅ FIXED: Read bot mode
+                let isPublic = true;
+                try {
+                    const messageCountPath = './data/messageCount.json';
+                    if (fs.existsSync(messageCountPath)) {
+                        const data = JSON.parse(fs.readFileSync(messageCountPath, 'utf8'));
+                        if (typeof data.isPublic === 'boolean') {
+                            isPublic = data.isPublic;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error reading bot mode:', error.message);
                 }
                 
+                // ✅ CRITICAL FIX: Private mode logic
+                // In PRIVATE mode:
+                // - Groups: Messages work for everyone, but COMMANDS only work for owner
+                // - DMs: Only owner can interact
+                if (!isPublic && !isOwnerMessage && chatUpdate.type === 'notify') {
+                    // ✅ If it's a DM (not a group), block completely
+                    if (!isGroup) {
+                        logger.debug('Message blocked - Private mode DM, not owner', {
+                            senderId: senderId.split('@')[0],
+                            fromMe: mek.key.fromMe,
+                            isGroup: false
+                        });
+                        return;
+                    }
+                    // ✅ If it's a group, DON'T block here - let main.js handle command restrictions
+                    // This allows group messages to be seen but commands to be restricted
+                }
+                
+                // Skip Baileys system messages
                 if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
 
-                // Clear message retry cache to prevent memory bloat
+                // Clear message retry cache
                 if (XeonBotInc?.msgRetryCounterCache) {
                     XeonBotInc.msgRetryCounterCache.clear()
                 }
 
+                // ✅ Pass to main handler
                 try {
                     await handleMessages(XeonBotInc, chatUpdate, true)
                 } catch (err) {
                     logger.error("Error in handleMessages", { error: err.message });
-                    // Only try to send error message if we have a valid chatId
                     if (mek.key && mek.key.remoteJid) {
                         await XeonBotInc.sendMessage(mek.key.remoteJid, {
                             text: '❌ An error occurred while processing your message.',
@@ -304,7 +315,6 @@ cachedGroupMetadata: async (jid) => {
             }
         })
 
-        // Add these event handlers for better functionality
         XeonBotInc.decodeJid = (jid) => {
             if (!jid) return jid
             if (/:\d+@/gi.test(jid)) {
@@ -339,14 +349,13 @@ cachedGroupMetadata: async (jid) => {
         }
 
         XeonBotInc.public = true
-        // Read actual mode from messageCount.json
         try {
             const messageCountPath = './data/messageCount.json';
             if (fs.existsSync(messageCountPath)) {
                 const data = JSON.parse(fs.readFileSync(messageCountPath, 'utf8'));
                 if (typeof data.isPublic === 'boolean') {
                     XeonBotInc.public = data.isPublic;
-                    console.log(chalk.cyan(`Bot mode loaded: ${XeonBotInc.public ? 'PUBLIC' : 'PRIVATE'}`));
+                    console.log(chalk.cyan(`Bot mode loaded: ${XeonBotInc.public ? 'PUBLIC ✅' : 'PRIVATE 🔒'}`));
                 }
             }
         } catch (error) {
@@ -355,11 +364,10 @@ cachedGroupMetadata: async (jid) => {
 
         XeonBotInc.serializeM = (m) => smsg(XeonBotInc, m, store)
 
-        // Handle pairing code - ENHANCED FOR SESSION GENERATION
+        // Pairing code handling
         if (pairingCode && !XeonBotInc.authState.creds.registered) {
             if (useMobile) throw new Error('Cannot use pairing code with mobile api')
 
-            // Use preset phone number
             let phoneNumber = "94765749332"
             
             console.log(chalk.yellow(`\n📱 Using phone number: ${phoneNumber}`))
@@ -386,30 +394,11 @@ cachedGroupMetadata: async (jid) => {
                 } catch (error) {
                     logger.error('Failed to get pairing code', { error: error.message });
                     console.error('Error requesting pairing code:', error)
-                    console.log(chalk.red('Failed to get pairing code. Retrying...'))
-                    
-                    // Retry after 5 seconds
-                    setTimeout(async () => {
-                        try {
-                            let code = await XeonBotInc.requestPairingCode(phoneNumber)
-                            code = code?.match(/.{1,4}/g)?.join("-") || code
-                            
-                            console.log('\n' + chalk.cyan('╭━━━━━━━━━━━━━━━━━━━━━━━━━━━╮'))
-                            console.log(chalk.cyan('│') + chalk.bold.green('   YOUR PAIRING CODE:     ') + chalk.cyan('│'))
-                            console.log(chalk.cyan('│') + chalk.bold.white(`        ${code}         `) + chalk.cyan('│'))
-                            console.log(chalk.cyan('╰━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n'))
-                            
-                            logger.info('Pairing code generated (retry)', { code });
-                        } catch (retryError) {
-                            logger.error('Retry failed', { error: retryError.message });
-                            console.error(chalk.red('Retry failed. Please restart the bot.'))
-                        }
-                    }, 5000)
                 }
             }, 3000)
         }
 
-        // Connection handling - ENHANCED FOR SESSION ID GENERATION
+        // Connection handling
         XeonBotInc.ev.on('connection.update', async (s) => {
             const { connection, lastDisconnect, qr } = s
             
@@ -432,11 +421,10 @@ cachedGroupMetadata: async (jid) => {
                     name: XeonBotInc.user.name 
                 });
 
-                // Generate SESSION_ID if this was a new session
                 if (sessionGenerationMode) {
-                    await delay(2000) // Wait for creds to be fully saved
+                    await delay(2000)
                     generateSessionId()
-                    sessionGenerationMode = false // Reset flag
+                    sessionGenerationMode = false
                 }
 
                 try {
@@ -459,7 +447,7 @@ cachedGroupMetadata: async (jid) => {
                 }
 
                 await delay(1999)
-                console.log(chalk.yellow(`\n\n                  ${chalk.bold.blue(`[ ${global.botname || 'KNIGHT BOT'} ]`)}\n\n`))
+                console.log(chalk.yellow(`\n\n                  ${chalk.bold.blue(`[ ${global.botname || 'SHANU BOT'} ]`)}\n\n`))
                 console.log(chalk.cyan(`< ================================================== >`))
                 console.log(chalk.magenta(`\n${global.themeemoji || '•'} YT CHANNEL: MR UNIQUE HACKER`))
                 console.log(chalk.magenta(`${global.themeemoji || '•'} GITHUB: mrunqiuehacker`))
@@ -496,10 +484,8 @@ cachedGroupMetadata: async (jid) => {
             }
         })
 
-        // Track recently-notified callers to avoid spamming messages
+        // Anticall handler
         const antiCallNotified = new Set();
-
-        // Anticall handler: block callers when enabled
         XeonBotInc.ev.on('call', async (calls) => {
             try {
                 const { readState: readAnticallState } = require('./commands/anticall');
@@ -512,23 +498,19 @@ cachedGroupMetadata: async (jid) => {
                     logger.info('Call blocked by anticall', { caller: callerJid });
                     
                     try {
-                        // First: attempt to reject the call if supported
                         try {
                             if (typeof XeonBotInc.rejectCall === 'function' && call.id) {
                                 await XeonBotInc.rejectCall(call.id, callerJid);
-                            } else if (typeof XeonBotInc.sendCallOfferAck === 'function' && call.id) {
-                                await XeonBotInc.sendCallOfferAck(call.id, callerJid, 'reject');
                             }
                         } catch {}
 
-                        // Notify the caller only once within a short window
                         if (!antiCallNotified.has(callerJid)) {
                             antiCallNotified.add(callerJid);
                             setTimeout(() => antiCallNotified.delete(callerJid), 60000);
                             await XeonBotInc.sendMessage(callerJid, { text: '📵 Anticall is enabled. Your call was rejected and you will be blocked.' });
                         }
                     } catch {}
-                    // Then: block after a short delay to ensure rejection and message are processed
+                    
                     setTimeout(async () => {
                         try { 
                             await XeonBotInc.updateBlockStatus(callerJid, 'block');
@@ -570,7 +552,6 @@ cachedGroupMetadata: async (jid) => {
     }
 }
 
-// Session cleanup on exit
 process.on('SIGINT', async () => {
     logger.info('Received SIGINT, closing gracefully...');
     if (global.XeonBotInc?.ws?.socket) {
@@ -587,7 +568,6 @@ process.on('SIGTERM', async () => {
     process.exit(0);
 });
 
-// Start the bot with error handling
 startXeonBotInc().catch(error => {
     logger.error('Fatal startup error', { error: error.message });
     console.error('Fatal error:', error)
