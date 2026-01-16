@@ -203,10 +203,15 @@ const startXeonBotInc = async () => {
             fireInitQueries: true,
             emitOwnEvents: false,
             shouldIgnoreJid: jid => false,
-            cachedGroupMetadata: async (jid) => {
-                const data = await store.fetchGroupMetadata(jid);
-                return data || null;
-            }
+const groupCache = new Map()
+
+cachedGroupMetadata: async (jid) => {
+    if (groupCache.has(jid)) return groupCache.get(jid)
+    const meta = await XeonBotInc.groupMetadata(jid)
+    groupCache.set(jid, meta)
+    return meta
+}
+}
         })
 
         // Clear old sessions periodically to prevent memory issues

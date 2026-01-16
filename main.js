@@ -308,27 +308,22 @@ async function handleMessages(sock, messageUpdate, printLog) {
             fromMe: message.key.fromMe,
             isSudo: senderIsSudo,
             isOwnerOrSudo: senderIsOwnerOrSudo,
-            finalOwnerStatus: isOwnerMessage
+            finalOwnerStatus: isOwnerMessage,
+            isGroup: isGroup
         });
 
-        // ✅ CHECK PRIVATE MODE IMMEDIATELY (before autoread, antidelete, etc.)
+        // ✅ READ BOT MODE
         const isPublic = loadBotConfig();
-        if (!isPublic && !isOwnerMessage) {
-            console.log('⛔ All features blocked - Private mode | User:', senderId.split('@')[0]);
-            // In private mode, non-owners get NOTHING - no autoread, no chatbot, no reactions
-            return;
-        }
-
-        // NOW continue with other features (only if public OR owner)
-        // Handle autoread functionality
+        
+        // Handle autoread functionality (works for everyone)
         await handleAutoread(sock, message);
 
-        // Store message for antidelete feature
+        // Store message for antidelete feature (works for everyone)
         if (message.message) {
             storeMessage(sock, message);
         }
 
-        // Handle message revocation
+        // Handle message revocation (works for everyone)
         if (message.message?.protocolMessage?.type === 0) {
             await handleMessageRevocation(sock, message);
             return;
@@ -382,7 +377,6 @@ async function handleMessages(sock, messageUpdate, printLog) {
         }
 
         // Handle tic-tac-toe moves (single digits 1-9 or surrender)
-        // Check ONLY if it's exactly a single digit with no prefix
         if (!userMessage.startsWith('.') && (/^[1-9]$/.test(userMessage) || userMessage === 'surrender')) {
             await handleTicTacToeMove(sock, chatId, senderId, userMessage);
             return;
@@ -419,15 +413,20 @@ async function handleMessages(sock, messageUpdate, printLog) {
             }
         }
 
-        // Check for command prefix
+        // ============================================
+        // NON-COMMAND MESSAGE HANDLING
+        // ============================================
         if (!userMessage.startsWith('.')) {
             await handleAutotypingForMessage(sock, chatId, userMessage);
 
+            // Group features (chatbot, tag detection, mentions)
+            // These work for EVERYONE in groups (public mode)
+            // In private mode, they still work in groups
             if (isGroup) {
                 await handleTagDetection(sock, chatId, message, senderId);
                 await handleMentionDetection(sock, chatId, message);
                 
-                // Chatbot only works in public mode or for owner
+                // Chatbot works in public mode OR for owner in private mode
                 if (isPublic || isOwnerMessage) {
                     await handleChatbotResponse(sock, chatId, message, userMessage, senderId);
                 }
@@ -435,23 +434,30 @@ async function handleMessages(sock, messageUpdate, printLog) {
             return;
         }
 
-        // ✅ REDUNDANT CHECK - Safety net (should never reach here in private mode)
+        // ============================================
+        // COMMAND HANDLING STARTS HERE
+        // ============================================
+        
+        // ✅ PRIVATE MODE CHECK FOR COMMANDS
+        // In PRIVATE mode:
+        // - Groups: Everyone can see messages, but only owner can use commands
+        // - DMs: Only owner can use commands
         if (!isPublic && !isOwnerMessage) {
-            console.log('⛔ Command blocked (safety net) - Private mode | User:', senderId.split('@')[0]);
+            console.log('⛔ Command blocked - Private mode | User:', senderId.split('@')[0], '| Group:', isGroup);
+            
             if (Math.random() < 0.3) {
                 await sock.sendMessage(chatId, {
                     text: '🔒 *Bot is in PRIVATE mode*\n\nOnly the owner can use commands right now.',
                     ...channelInfo
                 }, { quoted: message });
             }
-            return;
+            return; // Block ALL commands for non-owners in private mode
         }
 
         // Log command usage
         console.log(`📝 Command: ${userMessage} | ${isGroup ? 'Group' : 'Private'} | Mode: ${isPublic ? 'PUBLIC' : 'PRIVATE'} | Owner: ${isOwnerMessage ? '✅' : '❌'}`);
 
-
-        // Handle movie/twitter selection (numbers 1-99) - must come BEFORE other number checks
+        // Handle movie/twitter selection (numbers 1-99)
         if (/^\.?\d+$/.test(userMessage)) {
             const selection = userMessage.replace('.', '');
             
@@ -504,10 +510,8 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
         // COMMAND EXECUTION
         let commandExecuted = false;
-
-        // Priority order fixed: Check more specific commands FIRST
+     
         switch (true) {
-            // TEST COMMAND
             case userMessage === '.test':
                 console.log('🧪 TEST COMMAND TRIGGERED');
                 await sock.sendMessage(chatId, {
@@ -526,6 +530,9 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 commandExecuted = true;
                 break;
 
+            // ... (rest of your cases from the original code)
+            
+            
             // INSTAGRAM COMMANDS - Check .ig2 BEFORE .ig
             case userMessage.startsWith('.ig2'):
                 await ig2Command(sock, chatId, message);
