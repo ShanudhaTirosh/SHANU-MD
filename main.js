@@ -177,7 +177,7 @@ const mediafireCommand = require('./commands/mediafire');
 const gdriveCommand = require('./commands/gdrive');
 const imdbCommand = require('./commands/imdb');
 const channelIdCommand = require('./commands/channelid');
-const groupJidCommand = require('./commands/groupjid');
+
 // Initialize messageCount.json
 const messageCountPath = path.join(__dirname, 'data', 'messageCount.json');
 if (!fs.existsSync(path.join(__dirname, 'data'))) {
@@ -441,28 +441,46 @@ async function handleMessages(sock, messageUpdate, printLog) {
         let isSenderAdmin = false;
         let isBotAdmin = false;
 
-        // Admin check for admin commands in groups
-        if (isGroup && isAdminCommand) {
-            const adminStatus = await isAdmin(sock, chatId, senderId);
-            isSenderAdmin = adminStatus.isSenderAdmin;
-            isBotAdmin = adminStatus.isBotAdmin;
+    if (isGroup && isAdminCommand) {
+    // ✅ Owner bypass - Owners don't need to be admin
+    if (isOwnerMessage) {
+        console.log('✅ Owner bypass - Command allowed');
+        isSenderAdmin = true;
+        isBotAdmin = true;
+    } else {
+        // Regular admin check
+        console.log('🔍 Checking admin status...');
+        const adminStatus = await isAdmin(sock, chatId, senderId);
+        isSenderAdmin = adminStatus.isSenderAdmin;
+        isBotAdmin = adminStatus.isBotAdmin;
 
-            if (!isBotAdmin) {
-                await sock.sendMessage(chatId, { 
-                    text: 'Please make the bot an admin to use admin commands.', 
-                    ...channelInfo 
-                }, { quoted: message });
-                return;
-            }
+        console.log('📊 Admin check results:', {
+            sender: isSenderAdmin ? 'Admin' : 'Not Admin',
+            bot: isBotAdmin ? 'Admin' : 'Not Admin',
+            isOwner: isOwnerMessage
+        });
 
-            if (!isSenderAdmin && !isOwnerMessage) {
-                await sock.sendMessage(chatId, {
-                    text: 'Sorry, only group admins can use this command.',
-                    ...channelInfo
-                }, { quoted: message });
-                return;
-            }
+        // Check if bot is admin
+        if (!isBotAdmin) {
+            console.log('⚠️ Bot is not admin, blocking command');
+            await sock.sendMessage(chatId, { 
+                text: '❌ *Bot is not admin*\n\nPlease promote the bot to admin to use this command.\n\n_Tip: Bot number must be an admin in this group_', 
+                ...channelInfo 
+            }, { quoted: message });
+            return;
         }
+
+        // Check if sender is admin (non-owners only)
+        if (!isSenderAdmin) {
+            console.log('⚠️ Sender is not admin, blocking command');
+            await sock.sendMessage(chatId, {
+                text: '❌ *Admin Only Command*\n\nOnly group admins can use this command.',
+                ...channelInfo
+            }, { quoted: message });
+            return;
+        }
+    }
+}
 
         // Owner command check
         if (isOwnerCommand && !isOwnerMessage) {
@@ -1668,19 +1686,7 @@ case userMessage.startsWith('.ig2'):
     }
 }
 
-async function groupJidCommand(sock, chatId, message) {
-    const groupJid = message.key.remoteJid;
-    if (!groupJid.endsWith('@g.us')) {
-        return await sock.sendMessage(chatId, {
-            text: "❌ This command can only be used in a group."
-        });
-    }
-    await sock.sendMessage(chatId, {
-        text: `✅ Group JID: ${groupJid}`
-    }, {
-        quoted: message
-    });
-}
+
 
 async function handleGroupParticipantUpdate(sock, update) {
     try {
