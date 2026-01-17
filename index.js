@@ -173,55 +173,32 @@ const startXeonBotInc = async () => {
         console.log(chalk.green(`Using Baileys v${version.join('.')} ${isLatest ? '(Latest)' : '(Outdated)'}`))
         logger.info('Baileys version loaded', { version: version.join('.'), isLatest });
 
-     const XeonBotInc = makeWASocket({
+const XeonBotInc = makeWASocket({
     version,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: !pairingCode,
-    browser: ["Ubuntu", "Chrome", "20.0.04"],
+    browser: ["Chrome (Linux)", "", ""],
     auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
     },
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: true,
     syncFullHistory: false,
     getMessage: async (key) => {
         try {
-            let jid = jidNormalizedUser(key.remoteJid);
-            let msg = await store.loadMessage(jid, key.id);
+            const jid = jidNormalizedUser(key.remoteJid);
+            const msg = await store.loadMessage(jid, key.id);
             return msg?.message || "";
-        } catch (e) {
+        } catch {
             return "";
         }
     },
     msgRetryCounterCache,
+    // ✅ SIMPLIFIED - No complex caching
     defaultQueryTimeoutMs: 60000,
     connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 10000,
-    retryRequestDelayMs: 250,
-    maxMsgRetryCount: 5,
-    fireInitQueries: true,
-    emitOwnEvents: false,
-    shouldIgnoreJid: jid => false,
-    // ✅ FIXED: Proper group metadata caching
-    cachedGroupMetadata: async (jid) => {
-        try {
-            // First check store
-            let data = await store.fetchGroupMetadata(jid);
-            if (data) return data;
-            
-            // If not in store, fetch from WhatsApp
-            const metadata = await XeonBotInc.groupMetadata(jid);
-            if (metadata) {
-                // Cache it in store
-                await store.updateGroupMetadata(jid, metadata);
-            }
-            return metadata || null;
-        } catch (error) {
-            console.error('Error fetching group metadata:', error.message);
-            return null;
-}
-    }
+    keepAliveIntervalMs: 10000
 })
         setInterval(() => {
             if (XeonBotInc?.msgRetryCounterCache) {

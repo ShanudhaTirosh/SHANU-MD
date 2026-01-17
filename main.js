@@ -441,45 +441,55 @@ async function handleMessages(sock, messageUpdate, printLog) {
         let isSenderAdmin = false;
         let isBotAdmin = false;
 
-    if (isGroup && isAdminCommand) {
-    // ✅ Owner bypass - Owners don't need to be admin
+    // ✅ FIXED: Admin check with owner bypass
+if (isGroup && isAdminCommand) {
+    // Owner always bypasses admin check
     if (isOwnerMessage) {
-        console.log('✅ Owner bypass - Command allowed');
+        console.log('✅ OWNER BYPASS - No admin check needed');
         isSenderAdmin = true;
         isBotAdmin = true;
     } else {
         // Regular admin check
-        console.log('🔍 Checking admin status...');
-        const adminStatus = await isAdmin(sock, chatId, senderId);
-        isSenderAdmin = adminStatus.isSenderAdmin;
-        isBotAdmin = adminStatus.isBotAdmin;
+        console.log('🔍 Running admin check...');
+        
+        try {
+            const adminStatus = await isAdmin(sock, chatId, senderId);
+            isSenderAdmin = adminStatus.isSenderAdmin;
+            isBotAdmin = adminStatus.isBotAdmin;
+            
+            console.log('📊 Results:', {
+                sender: isSenderAdmin ? 'Admin ✅' : 'Not Admin ❌',
+                bot: isBotAdmin ? 'Admin ✅' : 'Not Admin ❌'
+            });
+        } catch (error) {
+            console.error('❌ Admin check error:', error.message);
+            // On error, deny to be safe
+            isSenderAdmin = false;
+            isBotAdmin = false;
+        }
 
-        console.log('📊 Admin check results:', {
-            sender: isSenderAdmin ? 'Admin' : 'Not Admin',
-            bot: isBotAdmin ? 'Admin' : 'Not Admin',
-            isOwner: isOwnerMessage
-        });
-
-        // Check if bot is admin
+        // Check bot admin status
         if (!isBotAdmin) {
-            console.log('⚠️ Bot is not admin, blocking command');
+            console.log('⚠️ BOT IS NOT ADMIN');
             await sock.sendMessage(chatId, { 
-                text: '❌ *Bot is not admin*\n\nPlease promote the bot to admin to use this command.\n\n_Tip: Bot number must be an admin in this group_', 
+                text: '❌ *Bot Must Be Admin*\n\nPlease promote the bot to admin first.\n\n_Make sure the bot number is an admin in this group._', 
                 ...channelInfo 
             }, { quoted: message });
             return;
         }
 
-        // Check if sender is admin (non-owners only)
+        // Check sender admin status  
         if (!isSenderAdmin) {
-            console.log('⚠️ Sender is not admin, blocking command');
+            console.log('⚠️ SENDER IS NOT ADMIN');
             await sock.sendMessage(chatId, {
-                text: '❌ *Admin Only Command*\n\nOnly group admins can use this command.',
+                text: '❌ *Admin Only*\n\nThis command can only be used by group admins.',
                 ...channelInfo
             }, { quoted: message });
             return;
         }
     }
+    
+    console.log('✅ Admin checks passed');
 }
 
         // Owner command check
