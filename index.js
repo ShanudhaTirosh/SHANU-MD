@@ -173,38 +173,56 @@ const startXeonBotInc = async () => {
         console.log(chalk.green(`Using Baileys v${version.join('.')} ${isLatest ? '(Latest)' : '(Outdated)'}`))
         logger.info('Baileys version loaded', { version: version.join('.'), isLatest });
 
-        const XeonBotInc = makeWASocket({
-            version,
-            logger: pino({ level: 'silent' }),
-            printQRInTerminal: !pairingCode,
-            browser: ["Ubuntu", "Chrome", "20.0.04"],
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
-            },
-            markOnlineOnConnect: true,
-            generateHighQualityLinkPreview: true,
-            syncFullHistory: false,
-            getMessage: async (key) => {
-                let jid = jidNormalizedUser(key.remoteJid)
-                let msg = await store.loadMessage(jid, key.id)
-                return msg?.message || ""
-            },
-            msgRetryCounterCache,
-            defaultQueryTimeoutMs: 60000,
-            connectTimeoutMs: 60000,
-            keepAliveIntervalMs: 10000,
-            retryRequestDelayMs: 250,
-            maxMsgRetryCount: 5,
-            fireInitQueries: true,
-            emitOwnEvents: false,
-            shouldIgnoreJid: jid => false,
-            cachedGroupMetadata: async (jid) => {
-                const data = await store.fetchGroupMetadata(jid);
-                return data || null;
+     const XeonBotInc = makeWASocket({
+    version,
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: !pairingCode,
+    browser: ["Ubuntu", "Chrome", "20.0.04"],
+    auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+    },
+    markOnlineOnConnect: true,
+    generateHighQualityLinkPreview: true,
+    syncFullHistory: false,
+    getMessage: async (key) => {
+        try {
+            let jid = jidNormalizedUser(key.remoteJid);
+            let msg = await store.loadMessage(jid, key.id);
+            return msg?.message || "";
+        } catch (e) {
+            return "";
+        }
+    },
+    msgRetryCounterCache,
+    defaultQueryTimeoutMs: 60000,
+    connectTimeoutMs: 60000,
+    keepAliveIntervalMs: 10000,
+    retryRequestDelayMs: 250,
+    maxMsgRetryCount: 5,
+    fireInitQueries: true,
+    emitOwnEvents: false,
+    shouldIgnoreJid: jid => false,
+    // ✅ FIXED: Proper group metadata caching
+    cachedGroupMetadata: async (jid) => {
+        try {
+            // First check store
+            let data = await store.fetchGroupMetadata(jid);
+            if (data) return data;
+            
+            // If not in store, fetch from WhatsApp
+            const metadata = await XeonBotInc.groupMetadata(jid);
+            if (metadata) {
+                // Cache it in store
+                await store.updateGroupMetadata(jid, metadata);
             }
-        })
-
+            return metadata || null;
+        } catch (error) {
+            console.error('Error fetching group metadata:', error.message);
+            return null;
+}
+    }
+})
         setInterval(() => {
             if (XeonBotInc?.msgRetryCounterCache) {
                 const cache = XeonBotInc.msgRetryCounterCache;
